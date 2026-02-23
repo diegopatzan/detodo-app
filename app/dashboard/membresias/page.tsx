@@ -2,15 +2,16 @@
 import { DataTable } from '@/components/ui/DataTable';
 import Link from 'next/link';
 import { Eye } from 'lucide-react';
-import { fetchFromApi } from '@/lib/api';
 import { MembresiaFilters } from '@/components/membresias/MembresiaFilters';
+import prisma from '@/lib/prisma';
+import { Prisma } from '@prisma/client';
 
 interface RawMembresia {
   Id_Membresia: number;
   Nombre: string | null;
   Telefono: string | null;
-  Tipo: string; // API provides this joined/mapped
-  FechaVencimiento: string | null;
+  Tipo: string; 
+  FechaVencimiento: string | null | Date;
   Id_Estado: boolean;
   [key: string]: unknown;
 }
@@ -24,9 +25,16 @@ interface MembresiaRow {
   Estado: boolean;
 }
 
+// Helper to handle BigInt serialization
+function replacer(key: string, value: unknown) {
+  if (typeof value === 'bigint') return value.toString();
+  return value;
+}
+
 async function getMembresias(searchParams: { [key: string]: string | string[] | undefined }) {
   const page = Number(searchParams.page) || 1;
   const pageSize = 20;
+  const skip = (page - 1) * pageSize;
 
   const filters: Record<string, string> = {};
   if (typeof searchParams.search === 'string') filters.search = searchParams.search;
@@ -34,18 +42,75 @@ async function getMembresias(searchParams: { [key: string]: string | string[] | 
   if (typeof searchParams.endDate === 'string') filters.endDate = searchParams.endDate;
   if (typeof searchParams.status === 'string') filters.status = searchParams.status;
 
-  const { data, total } = await fetchFromApi('membresias', page, pageSize, filters);
+  // Build where clause
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const conditions: any[] = [];
 
-  const formattedData: MembresiaRow[] = (data as RawMembresia[]).map(m => ({
-    Id_Membresia: m.Id_Membresia,
-    Nombre: m.Nombre,
-    Telefono: m.Telefono,
-    Tipo: m.Tipo || '-',
-    FechaVencimiento: m.FechaVencimiento ? new Date(m.FechaVencimiento).toLocaleDateString() : '-',
-    Estado: m.Id_Estado === true
-  }));
+  if (filters.startDate) {
+    conditions.push({ swdatecreated: { gte: new Date(filters.startDate) } });
+  }
+  if (filters.endDate) {
+    const end = new Date(filters.endDate);
+    end.setHours(23, 59, 59, 999);
+    conditions.push({ swdatecreated: { lte: end } });
+  }
 
-  return { data: formattedData, total };
+  if (filters.search) {
+     conditions.push({
+       OR: [
+         { Nombre: { contains: filters.search } },
+         { NoTarjetaMembresia: { contains: filters.search } },
+         { Telefono: { contains: filters.search } },
+       ]
+     });
+  }
+
+  if (filters.status) {
+      if (filters.status === 'active') {
+          conditions.push({ Id_Estado: true });
+      } else if (filters.status === 'inactive') {
+          conditions.push({
+            OR: [
+              { Id_Estado: false },
+              { Id_Estado: null }
+            ]
+          });
+      }
+  }
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const where: any = { AND: conditions };
+
+  try {
+    // Fetch types for mapping
+    const tipos = await prisma.membresiaTipo.findMany();
+    const tipoMap = new Map(tipos.map(t => [t.Id_MembresiaTipo, t.Descripcion]));
+
+    const [membresias, total] = await Promise.all([
+      prisma.membresia.findMany({
+        where,
+        take: pageSize,
+        skip: skip,
+        orderBy: { Id_Membresia: 'asc' }
+      }),
+      prisma.membresia.count({ where })
+    ]);
+
+    const formattedData: MembresiaRow[] = membresias.map(m => ({
+      Id_Membresia: m.Id_Membresia,
+      Nombre: m.Nombre,
+      Telefono: m.Telefono,
+      Tipo: tipoMap.get(m.Id_MembresiaTipo) || `Tipo ${m.Id_MembresiaTipo}`,
+      FechaVencimiento: m.FechaVencimiento ? new Date(m.FechaVencimiento).toLocaleDateString() : '-',
+      Estado: m.Id_Estado === true
+    }));
+
+    return { data: formattedData, total };
+
+  } catch (error) {
+    console.error('Error fetching membresias:', error);
+    return { data: [], total: 0 };
+  }
 }
 
 export default async function MembresiasPage({

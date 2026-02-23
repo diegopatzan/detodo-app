@@ -17,7 +17,7 @@ export function Sidebar() {
     <aside className="w-64 bg-white border-r border-gray-200 text-gray-900 flex-shrink-0 min-h-screen">
       <div className="p-6 border-b border-gray-200">
         <h1 className="text-xl font-bold tracking-wider text-black1-700">
-          CHINA DETODO LOGISTICS
+          DE TODO INTERNACIONAL, SOCIEDAD ANONIMA
         </h1>
       </div>
 

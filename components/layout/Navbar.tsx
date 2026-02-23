@@ -31,7 +31,7 @@ export function Navbar() {
               <div className="bg-white/10 p-1.5 rounded">
                 <Grid className="w-5 h-5 text-white" />
               </div>
-              CHINA DETODO LOGISTICS
+              DE TODO INTERNACIONAL, SOCIEDAD ANONIMA
             </Link>
             
             {/* Desktop Menu */}

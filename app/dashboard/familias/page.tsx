@@ -1,6 +1,6 @@
-
 import { DataTable } from '@/components/ui/DataTable';
-import { fetchFromApi } from '@/lib/api';
+import prisma from '@/lib/prisma';
+import { Prisma } from '@prisma/client';
 import { FamiliaFilters } from '@/components/familias/FamiliaFilters';
 
 interface FamiliaRow {
@@ -11,13 +11,37 @@ interface FamiliaRow {
 async function getFamilias(searchParams: { [key: string]: string | string[] | undefined }) {
   const page = Number(searchParams.page) || 1;
   const pageSize = 20;
+  const skip = (page - 1) * pageSize;
 
-  const filters: Record<string, string> = {};
-  if (typeof searchParams.search === 'string') filters.search = searchParams.search;
+  const search = typeof searchParams.search === 'string' ? searchParams.search : undefined;
 
-  const { data, total } = await fetchFromApi('familias', page, pageSize, filters);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const where: any = {};
+  if (search) {
+    where.Descripcion = { contains: search };
+  }
 
-  return { data: data as FamiliaRow[], total };
+  try {
+    const [familias, total] = await Promise.all([
+      prisma.familia.findMany({
+        where,
+        take: pageSize,
+        skip: skip,
+        orderBy: { Id_Familia: 'asc' }
+      }),
+      prisma.familia.count({ where })
+    ]);
+
+    const formattedData: FamiliaRow[] = familias.map(f => ({
+      Id_Familia: f.Id_Familia,
+      Descripcion: f.Descripcion
+    }));
+
+    return { data: formattedData, total };
+  } catch (error) {
+    console.error('Error fetching familias:', error);
+    return { data: [], total: 0 };
+  }
 }
 
 export default async function FamiliasPage({
@@ -32,13 +56,9 @@ export default async function FamiliasPage({
   const { data, total } = await getFamilias(resolvedSearchParams);
   const totalPages = Math.ceil(total / pageSize);
 
-  const columns: {
-    header: string;
-    accessorKey: keyof FamiliaRow;
-    className?: string;
-  }[] = [
-    { header: 'ID', accessorKey: 'Id_Familia', className: 'w-24' },
-    { header: 'Descripción', accessorKey: 'Descripcion', className: 'font-medium text-gray-900' },
+  const columns = [
+    { header: 'ID', accessorKey: 'Id_Familia' as keyof FamiliaRow, className: 'w-24' },
+    { header: 'Descripción', accessorKey: 'Descripcion' as keyof FamiliaRow, className: 'font-medium text-gray-900' },
   ];
 
   return (
@@ -48,7 +68,7 @@ export default async function FamiliasPage({
           <h1 className="text-2xl font-bold text-gray-900">Familias</h1>
         </div>
       </div>
-
+      
       <FamiliaFilters />
 
       <DataTable 
