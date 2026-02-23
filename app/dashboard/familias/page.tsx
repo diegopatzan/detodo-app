@@ -1,6 +1,5 @@
 import { DataTable } from '@/components/ui/DataTable';
-import prisma from '@/lib/prisma';
-import { Prisma } from '@prisma/client';
+import { fetchFromApi } from '@/lib/api';
 import { FamiliaFilters } from '@/components/familias/FamiliaFilters';
 
 interface FamiliaRow {
@@ -11,37 +10,13 @@ interface FamiliaRow {
 async function getFamilias(searchParams: { [key: string]: string | string[] | undefined }) {
   const page = Number(searchParams.page) || 1;
   const pageSize = 20;
-  const skip = (page - 1) * pageSize;
 
-  const search = typeof searchParams.search === 'string' ? searchParams.search : undefined;
+  const filters: Record<string, string> = {};
+  if (typeof searchParams.search === 'string') filters.search = searchParams.search;
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const where: any = {};
-  if (search) {
-    where.Descripcion = { contains: search };
-  }
+  const { data, total } = await fetchFromApi('familias', page, pageSize, filters);
 
-  try {
-    const [familias, total] = await Promise.all([
-      prisma.familia.findMany({
-        where,
-        take: pageSize,
-        skip: skip,
-        orderBy: { Id_Familia: 'asc' }
-      }),
-      prisma.familia.count({ where })
-    ]);
-
-    const formattedData: FamiliaRow[] = familias.map(f => ({
-      Id_Familia: f.Id_Familia,
-      Descripcion: f.Descripcion
-    }));
-
-    return { data: formattedData, total };
-  } catch (error) {
-    console.error('Error fetching familias:', error);
-    return { data: [], total: 0 };
-  }
+  return { data: data as FamiliaRow[], total };
 }
 
 export default async function FamiliasPage({

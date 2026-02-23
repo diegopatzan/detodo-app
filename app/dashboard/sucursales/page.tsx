@@ -1,6 +1,7 @@
 import { DataTable } from '@/components/ui/DataTable';
-import prisma from '@/lib/prisma';
-import { Prisma } from '@prisma/client';
+import Link from 'next/link';
+import { Eye } from 'lucide-react';
+import { fetchFromApi } from '@/lib/api';
 
 interface SucursalRow {
   Id_Sucursal: number;
@@ -11,34 +12,34 @@ interface SucursalRow {
   Email: string | null;
 }
 
+interface RawSucursal {
+  Id_Sucursal: number;
+  NombreSucursal: string | null;
+  Direccion: string | null;
+  Telefono: string | number | null; // API might return formatted string or number
+  Nit: string | null;
+  Email: string | null;
+  [key: string]: unknown;
+}
+
+// Helper to handle BigInt serialization
+// API handles serialization, so we just map format here if needed
+const serializeSucursal = (sucursal: RawSucursal): SucursalRow => ({
+  Id_Sucursal: sucursal.Id_Sucursal,
+  NombreSucursal: sucursal.NombreSucursal,
+  Direccion: sucursal.Direccion,
+  Telefono: sucursal.Telefono ? sucursal.Telefono.toString() : null,
+  Nit: sucursal.Nit,
+  Email: sucursal.Email
+});
+
 async function getSucursales(page: number, pageSize: number) {
-  const skip = (page - 1) * pageSize;
+  const { data, total } = await fetchFromApi('sucursales', page, pageSize);
+  
+  // Map BigInt to string (already strings from API if BigInt originally)
+  const formattedData = (data as RawSucursal[]).map(serializeSucursal);
 
-  try {
-    const [sucursales, total] = await Promise.all([
-      prisma.sucursal.findMany({
-        take: pageSize,
-        skip: skip,
-        orderBy: { Id_Sucursal: 'asc' }
-      }),
-      prisma.sucursal.count()
-    ]);
-
-    const formattedData: SucursalRow[] = sucursales.map(s => ({
-      Id_Sucursal: s.Id_Sucursal,
-      NombreSucursal: s.NombreSucursal,
-      Direccion: s.Direccion,
-      Telefono: s.Telefono ? s.Telefono.toString() : null,
-      Nit: s.Nit,
-      Email: s.Email
-    }));
-
-    return { data: formattedData, total };
-
-  } catch (error) {
-    console.error('Error fetching sucursales:', error);
-    return { data: [], total: 0 };
-  }
+  return { data: formattedData, total };
 }
 
 export default async function SucursalesPage({

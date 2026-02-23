@@ -3,8 +3,7 @@ import { formatCurrency } from '@/lib/utils';
 import Link from 'next/link';
 import { Eye } from 'lucide-react';
 import { InventarioFilters } from '@/components/inventario/InventarioFilters';
-import prisma from '@/lib/prisma';
-import { Prisma } from '@prisma/client';
+import { fetchFromApi } from '@/lib/api';
 
 interface ProductRow {
   Id_Producto: string;
@@ -12,12 +11,21 @@ interface ProductRow {
   PrecioVentaBase: number;
   StockMinimo: number | null;
   InventarioActivo: boolean | null;
+  [key: string]: unknown;
+}
+
+interface RawProducto {
+  Id_Producto: string;
+  Nombre: string | null;
+  PrecioVentaBase: string | number | null;
+  StockMinimo: number | null;
+  InventarioActivo: boolean | null;
+  [key: string]: unknown;
 }
 
 async function getProductos(searchParams: { [key: string]: string | string[] | undefined }) {
   const page = Number(searchParams.page) || 1;
   const pageSize = 50;
-  const skip = (page - 1) * pageSize;
   
   const filters: Record<string, string> = {};
   if (typeof searchParams.search === 'string') filters.search = searchParams.search;
@@ -25,67 +33,17 @@ async function getProductos(searchParams: { [key: string]: string | string[] | u
   if (typeof searchParams.endDate === 'string') filters.endDate = searchParams.endDate;
   if (typeof searchParams.status === 'string') filters.status = searchParams.status;
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const conditions: any[] = [];
+  const { data, total } = await fetchFromApi('inventario', page, pageSize, filters);
 
-  if (filters.startDate) {
-    conditions.push({ swdatecreated: { gte: new Date(filters.startDate) } });
-  }
-  if (filters.endDate) {
-    const end = new Date(filters.endDate);
-    end.setHours(23, 59, 59, 999);
-    conditions.push({ swdatecreated: { lte: end } });
-  }
-
-  if (filters.search) {
-     conditions.push({
-       OR: [
-         { Nombre: { contains: filters.search } },
-         { Id_Producto: { contains: filters.search } },
-       ]
-     });
-  }
-
-  if (filters.status) {
-      if (filters.status === 'active') {
-          conditions.push({ InventarioActivo: true });
-      } else if (filters.status === 'inactive') {
-          conditions.push({
-            OR: [
-              { InventarioActivo: false },
-              { InventarioActivo: null }
-            ]
-          });
-      }
-  }
-
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const where: any = { AND: conditions };
-
-  try {
-    const [productos, total] = await Promise.all([
-      prisma.producto.findMany({
-        where,
-        take: pageSize,
-        skip: skip,
-        orderBy: { Id_Producto: 'asc' }
-      }),
-      prisma.producto.count({ where })
-    ]);
-
-    const formattedData: ProductRow[] = productos.map(p => ({
+  const formattedData: ProductRow[] = (data as RawProducto[]).map(p => ({
       Id_Producto: p.Id_Producto,
       Nombre: p.Nombre,
       PrecioVentaBase: p.PrecioVentaBase ? Number(p.PrecioVentaBase) : 0,
       StockMinimo: p.StockMinimo,
       InventarioActivo: p.InventarioActivo
-    }));
+  }));
 
-    return { data: formattedData, total };
-  } catch (error) {
-    console.error('Error fetching productos:', error);
-    return { data: [], total: 0 };
-  }
+  return { data: formattedData, total };
 }
 
 export default async function InventarioPage({

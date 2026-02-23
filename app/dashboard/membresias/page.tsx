@@ -1,10 +1,8 @@
-
 import { DataTable } from '@/components/ui/DataTable';
 import Link from 'next/link';
 import { Eye } from 'lucide-react';
 import { MembresiaFilters } from '@/components/membresias/MembresiaFilters';
-import prisma from '@/lib/prisma';
-import { Prisma } from '@prisma/client';
+import { fetchFromApi } from '@/lib/api';
 
 interface RawMembresia {
   Id_Membresia: number;
@@ -25,16 +23,9 @@ interface MembresiaRow {
   Estado: boolean;
 }
 
-// Helper to handle BigInt serialization
-function replacer(key: string, value: unknown) {
-  if (typeof value === 'bigint') return value.toString();
-  return value;
-}
-
 async function getMembresias(searchParams: { [key: string]: string | string[] | undefined }) {
   const page = Number(searchParams.page) || 1;
   const pageSize = 20;
-  const skip = (page - 1) * pageSize;
 
   const filters: Record<string, string> = {};
   if (typeof searchParams.search === 'string') filters.search = searchParams.search;
@@ -42,75 +33,18 @@ async function getMembresias(searchParams: { [key: string]: string | string[] | 
   if (typeof searchParams.endDate === 'string') filters.endDate = searchParams.endDate;
   if (typeof searchParams.status === 'string') filters.status = searchParams.status;
 
-  // Build where clause
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const conditions: any[] = [];
+  const { data, total } = await fetchFromApi('membresias', page, pageSize, filters);
 
-  if (filters.startDate) {
-    conditions.push({ swdatecreated: { gte: new Date(filters.startDate) } });
-  }
-  if (filters.endDate) {
-    const end = new Date(filters.endDate);
-    end.setHours(23, 59, 59, 999);
-    conditions.push({ swdatecreated: { lte: end } });
-  }
+  const formattedData: MembresiaRow[] = (data as RawMembresia[]).map(m => ({
+    Id_Membresia: m.Id_Membresia,
+    Nombre: m.Nombre,
+    Telefono: m.Telefono,
+    Tipo: m.Tipo || `Tipo ${m.Id_MembresiaTipo}`,
+    FechaVencimiento: m.FechaVencimiento ? new Date(m.FechaVencimiento).toLocaleDateString() : '-',
+    Estado: m.Id_Estado === true
+  }));
 
-  if (filters.search) {
-     conditions.push({
-       OR: [
-         { Nombre: { contains: filters.search } },
-         { NoTarjetaMembresia: { contains: filters.search } },
-         { Telefono: { contains: filters.search } },
-       ]
-     });
-  }
-
-  if (filters.status) {
-      if (filters.status === 'active') {
-          conditions.push({ Id_Estado: true });
-      } else if (filters.status === 'inactive') {
-          conditions.push({
-            OR: [
-              { Id_Estado: false },
-              { Id_Estado: null }
-            ]
-          });
-      }
-  }
-
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const where: any = { AND: conditions };
-
-  try {
-    // Fetch types for mapping
-    const tipos = await prisma.membresiaTipo.findMany();
-    const tipoMap = new Map(tipos.map(t => [t.Id_MembresiaTipo, t.Descripcion]));
-
-    const [membresias, total] = await Promise.all([
-      prisma.membresia.findMany({
-        where,
-        take: pageSize,
-        skip: skip,
-        orderBy: { Id_Membresia: 'asc' }
-      }),
-      prisma.membresia.count({ where })
-    ]);
-
-    const formattedData: MembresiaRow[] = membresias.map(m => ({
-      Id_Membresia: m.Id_Membresia,
-      Nombre: m.Nombre,
-      Telefono: m.Telefono,
-      Tipo: tipoMap.get(m.Id_MembresiaTipo) || `Tipo ${m.Id_MembresiaTipo}`,
-      FechaVencimiento: m.FechaVencimiento ? new Date(m.FechaVencimiento).toLocaleDateString() : '-',
-      Estado: m.Id_Estado === true
-    }));
-
-    return { data: formattedData, total };
-
-  } catch (error) {
-    console.error('Error fetching membresias:', error);
-    return { data: [], total: 0 };
-  }
+  return { data: formattedData, total };
 }
 
 export default async function MembresiasPage({
@@ -125,33 +59,32 @@ export default async function MembresiasPage({
   const { data, total } = await getMembresias(resolvedSearchParams);
   const totalPages = Math.ceil(total / pageSize);
 
-  const columns: {
-    header: string;
-    accessorKey: keyof MembresiaRow;
-    className?: string;
-    cell?: (row: MembresiaRow) => React.ReactNode;
-  }[] = [
-    { header: 'ID', accessorKey: 'Id_Membresia', className: 'w-20' },
-    { header: 'Nombre', accessorKey: 'Nombre', className: 'font-medium text-gray-900' },
-    { header: 'Teléfono', accessorKey: 'Telefono' },
-    { header: 'Tipo', accessorKey: 'Tipo' },
-    { header: 'Vencimiento', accessorKey: 'FechaVencimiento' },
+  const columns = [
+    { header: 'ID', accessorKey: 'Id_Membresia' as keyof MembresiaRow, className: 'w-24' },
+    { header: 'Nombre', accessorKey: 'Nombre' as keyof MembresiaRow, className: 'font-medium text-gray-900' },
+    { header: 'Teléfono', accessorKey: 'Telefono' as keyof MembresiaRow },
+    { header: 'Tipo', accessorKey: 'Tipo' as keyof MembresiaRow },
+    { header: 'Vencimiento', accessorKey: 'FechaVencimiento' as keyof MembresiaRow },
     { 
       header: 'Estado', 
-      accessorKey: 'Estado',
-      cell: (row) => (
-        <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-gray-100 text-gray-800`}>
+      accessorKey: 'Estado' as keyof MembresiaRow,
+      cell: (row: MembresiaRow) => (
+        <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${
+          row.Estado 
+            ? 'bg-green-100 text-green-800' 
+            : 'bg-red-100 text-red-800'
+        }`}>
           {row.Estado ? 'Activo' : 'Inactivo'}
         </span>
       )
     },
     {
       header: 'Acciones',
-      accessorKey: 'Id_Membresia',
+      accessorKey: 'Id_Membresia' as keyof MembresiaRow,
       className: 'text-center',
-      cell: (row) => (
+      cell: (row: MembresiaRow) => (
         <Link 
-          href={`/dashboard/membresias/${row.Id_Membresia}`} 
+          href={`/dashboard/membresias/${row.Id_Membresia}`}
           className="inline-flex items-center justify-center p-2 text-gray-500 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
           title="Ver Detalle"
         >
@@ -168,7 +101,7 @@ export default async function MembresiasPage({
           <h1 className="text-2xl font-bold text-gray-900">Membresías</h1>
         </div>
       </div>
-
+      
       <MembresiaFilters />
 
       <DataTable 

@@ -1,35 +1,14 @@
 import { DataTable } from '@/components/ui/DataTable';
-import prisma from '@/lib/prisma';
-import { Prisma } from '@prisma/client';
+import { fetchFromApi } from '@/lib/api';
+
+async function getEmpresas(page: number, pageSize: number) {
+  const { data, total } = await fetchFromApi('empresas', page, pageSize);
+  return { data: data as EmpresaRow[], total };
+}
 
 interface EmpresaRow {
   Id_Empresa: number;
   Descripcion: string | null;
-}
-
-async function getEmpresas(page: number, pageSize: number) {
-  const skip = (page - 1) * pageSize;
-
-  try {
-    const [empresas, total] = await Promise.all([
-      prisma.empresa.findMany({
-        take: pageSize,
-        skip: skip,
-        orderBy: { Id_Empresa: 'asc' }
-      }),
-      prisma.empresa.count()
-    ]);
-
-    const formattedData: EmpresaRow[] = empresas.map(e => ({
-      Id_Empresa: e.Id_Empresa,
-      Descripcion: e.Descripcion,
-    }));
-
-    return { data: formattedData, total };
-  } catch (error) {
-    console.error('Error fetching empresas:', error);
-    return { data: [], total: 0 };
-  }
 }
 
 export default async function EmpresasPage({
