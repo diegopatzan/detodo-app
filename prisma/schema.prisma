@@ -1,0 +1,175 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlserver"
+  url      = env("DATABASE_URL")
+}
+
+model Factura {
+  Id_Empresa                Int
+  Id_Sucursal               Int
+  Id_FacturaTemporal        BigInt    @id
+  Id_Bodega                 Int
+  Id_Cliente                Int
+  No_NIT                    String?   @db.NVarChar(100)
+  Nombre                    String?   @db.NVarChar(1000)
+  Direccion                 String?   @db.NVarChar(1200)
+  NumeroTelefono            String?   @db.VarChar(8)
+  CorreoElectronico         String?   @db.NVarChar(120)
+  Ticket                    Boolean?
+  Factura                   Boolean?
+  NumeroDeCaja              String?   @db.VarChar(20)
+  CodigoClienteMembresia    String?   @db.VarChar(50)
+  CantidadProductos         Int?
+  Total_Venta               Decimal?  @db.Decimal(18, 2)
+  Total_Descuento           Decimal?  @db.Decimal(18, 2)
+  Total_IVA                 Decimal?  @db.Decimal(18, 2)
+  Total_SubTotal            Decimal?  @db.Decimal(18, 2)
+  Total_Efectivo            Decimal?  @db.Decimal(18, 2)
+  Total_TarjetaCredito      Decimal?  @db.Decimal(18, 2)
+  Total_Transferencia       Decimal?  @db.Decimal(18, 2)
+  Total_NotaDeCredito       Decimal?  @db.Decimal(18, 2)
+  Total_Credito             Decimal?  @db.Decimal(18, 2)
+  NotaDeCreditoNumero       String?   @db.VarChar(150)
+  NotaNoCreditoNumero       String?   @db.VarChar(150)
+  NotaNumeroTransferencia   String?   @db.VarChar(150)
+  swcreatedby               Int?
+  swdatecreated             DateTime? @db.DateTime
+  swupdatedby               Int?
+  swdateupdated             DateTime? @db.DateTime
+  fechaCertificacion        DateTime? @db.DateTime
+  fechaAnulacion            DateTime? @db.DateTime
+  Numero_Autorizacion       String?   @db.NVarChar(1000)
+  Factura_Serie             String?   @db.NVarChar(1000)
+  Factura_Numero            String?   @db.NVarChar(1000)
+  TokenSesion               BigInt?
+  Observaciones             String?   @db.NVarChar(Max)
+  CertificacionRealizada    Boolean?
+  Id_Cotizacion             BigInt
+  Id_Estado                 Int?
+  MotivoAnulacion           String?   @db.NVarChar(Max)
+  Id_Membresia              Int?
+  UsuarioDescuento_id       Int?
+  UsuarioDescuentoClave_Str String?   @db.VarChar(30)
+}
+
+model Empresa {
+  Id_Empresa  Int     @id
+  Descripcion String? @db.VarChar(500)
+}
+
+model FacturaDetalle {
+  Id_Empresa                  Int
+  Id_Sucursal                 Int
+  Id_FacturaTemporal          BigInt
+  Id_Producto                 String    @db.NVarChar(300)
+  Id_ProductoFactura          String?   @db.NVarChar(300)
+  Cantidad                    Int?
+  Precio_Unitario             Decimal?  @db.Decimal(18, 2)
+  PorcentajeDescuento         Decimal?  @db.Decimal(18, 2)
+  PorcentajeDescuentoEsperado Decimal?  @db.Decimal(18, 2)
+  Total_Venta                 Decimal?  @db.Decimal(18, 2)
+  Total_Descuento             Decimal?  @db.Decimal(18, 2)
+  Total_IVA                   Decimal?  @db.Decimal(18, 2)
+  Total_SubTotal              Decimal?  @db.Decimal(18, 2)
+  swcreatedby                 Int?
+  swdatecreated               DateTime? @db.DateTime
+  swupdatedby                 Int?
+  swdateupdated               DateTime? @db.DateTime
+  Descripcion                 String?   @db.NVarChar(3000)
+
+  @@id([Id_FacturaTemporal, Id_Producto])
+}
+
+model Familia {
+  Id_Familia  Int     @id
+  Descripcion String? @db.VarChar(500)
+}
+
+model Membresia {
+  Id_Empresa          Int
+  Id_Sucursal         Int
+  Id_Membresia        Int       @id
+  Id_MembresiaTipo    Int
+  Telefono            String    @db.VarChar(8)
+  Nombre              String?   @db.VarChar(250)
+  Id_FacturaTemporal  BigInt?
+  NoTarjetaMembresia  String?   @db.VarChar(50)
+  swdatecreated       DateTime? @db.DateTime
+  FechaVencimiento    DateTime  @db.DateTime
+  swcreatedby         Int?
+  Id_Estado           Boolean?
+  Vendedor_id         Int?
+  Id_Vendedor         Int?
+  Telefono_Secundario String?   @db.VarChar(15)
+}
+
+model MembresiaTipo {
+  Id_Empresa          Int
+  Id_MembresiaTipo    Int      @id
+  Descripcion         String?  @db.NVarChar(200)
+  PorcentajeDescuento Decimal? @db.Decimal(18, 2)
+}
+
+model Producto {
+  Id_Empresa                                          Int
+  Id_Sucursal                                         Int
+  Id_Familia                                          Int
+  Id_Producto                                         String    @id @db.NVarChar(300)
+  Id_ProductoPadre                                    String?   @db.NVarChar(300)
+  Nombre                                              String?   @db.NVarChar(Max)
+  Descripcion                                         String?   @db.NVarChar(Max)
+  NombreChino                                         String?   @db.NVarChar(Max)
+  DescripcionChina                                    String?   @db.NVarChar(Max)
+  ImagenNombre                                        String?   @db.NVarChar(300)
+  PrecioCosto                                         Decimal?  @db.Decimal(18, 2)
+  PrecioVentaBase                                     Decimal?  @db.Decimal(18, 2)
+  CantidaParaQuitarIncremento                         Int?
+  PorcentajeIncremento                                Decimal?  @db.Decimal(18, 2)
+  CantidaParaAplicarAPorcentajeDescuentoPorCompra     Int?
+  PorcentajeDescuentoPorCompra                        Decimal?  @db.Decimal(18, 2)
+  CantidaParaAplicarAPorcentajeDescuentoPorCompraDos  Int?
+  PorcentajeDescuentoPorCompraDos                     Decimal?  @db.Decimal(18, 2)
+  CantidaParaAplicarAPorcentajeDescuentoPorCompraTres Int?
+  PorcentajeDescuentoPorCompraTres                    Decimal?  @db.Decimal(18, 2)
+  idarticulo                                          Int?
+  repeticion                                          Int?
+  Id_Producto_Tipo                                    String?   @db.NVarChar(2)
+  StockMinimo                                         Int?
+  InventarioActivo                                    Boolean?
+  Id_Rack                                             String?   @db.NVarChar(200)
+  Id_Columna                                          String?   @db.NVarChar(200)
+  Id_Fila                                             String?   @db.NVarChar(200)
+  Estado                                              Boolean
+  swcreatedby                                         Int?
+  swdatecreated                                       DateTime? @db.DateTime
+  swupdatedby                                         Int?
+  swdateupdated                                       DateTime? @db.DateTime
+}
+
+model Sucursal {
+  Id_Empresa                  Int
+  Id_Sucursal                 Int      @id
+  NombreSucursal              String?  @db.NVarChar(1000)
+  NombreEnEspa_ol             String?  @map("NombreEnEspañol") @db.NVarChar(1000)
+  Direccion                   String?  @db.NVarChar(1000)
+  Telefono                    BigInt?
+  Nit                         String?  @db.NVarChar(40)
+  Email                       String?  @db.NVarChar(1000)
+  Imagen                      String?  @db.NVarChar(1000)
+  Numero_Establecimiento      Int?
+  AplicaDescuentoPorMembresia Boolean?
+  PorcentajeCobroPorTarjeta   Decimal? @db.Decimal(18, 2)
+  ManejaInventario            Boolean?
+  Id_SucursalSistemaAnterior  Int?
+}
+
+model Usuario {
+  Id_Usuario Int     @id
+  Nombre     String? @db.NVarChar(100)
+  Apellidos  String? @db.NVarChar(100)
+  Usuario    String? @db.NVarChar(100)
+  Email      String? @db.NVarChar(200)
+}
