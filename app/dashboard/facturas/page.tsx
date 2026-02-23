@@ -1,8 +1,9 @@
 import { DataTable } from '@/components/ui/DataTable';
 import Link from 'next/link';
 import { Eye } from 'lucide-react';
-import { fetchFromApi } from '@/lib/api';
 import { FacturaFilters } from '@/components/facturas/FacturaFilters';
+import prisma from '@/lib/prisma';
+import { Prisma } from '@prisma/client';
 
 interface ApiFactura {
   Id_FacturaTemporal: string;
@@ -16,10 +17,19 @@ interface ApiFactura {
   [key: string]: unknown;
 }
 
+// Helper to handle BigInt serialization
+function replacer(key: string, value: unknown) {
+  if (typeof value === 'bigint') {
+    return value.toString();
+  }
+  return value;
+}
+
 // handle filters
 async function getFacturas(searchParams: { [key: string]: string | string[] | undefined }) {
   const page = Number(searchParams.page) || 1;
   const pageSize = 20;
+  const skip = (page - 1) * pageSize;
 
   // Extract valid string filters
   const filters: Record<string, string> = {};
@@ -28,14 +38,72 @@ async function getFacturas(searchParams: { [key: string]: string | string[] | un
   if (typeof searchParams.endDate === 'string') filters.endDate = searchParams.endDate;
   if (typeof searchParams.status === 'string') filters.status = searchParams.status;
 
-  const { data, total } = await fetchFromApi('facturas', page, pageSize, filters);
+  // Build where clause
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const conditions: any[] = [];
 
-  const formattedData = (data as ApiFactura[]).map((f) => ({
-    ...f,
-    swdatecreated: f.swdatecreated ? new Date(f.swdatecreated).toLocaleDateString() : '-',
-  }));
-  
-  return { data: formattedData, total };
+  if (filters.startDate) {
+    conditions.push({ swdatecreated: { gte: new Date(filters.startDate) } });
+  }
+  if (filters.endDate) {
+    const end = new Date(filters.endDate);
+    end.setHours(23, 59, 59, 999);
+    conditions.push({ swdatecreated: { lte: end } });
+  }
+
+  if (filters.search) {
+     conditions.push({
+       OR: [
+         { Nombre: { contains: filters.search } },
+         { No_NIT: { contains: filters.search } },
+         { Factura_Numero: { contains: filters.search } },
+       ]
+     });
+  }
+
+  if (filters.status) {
+      if (filters.status === 'certificated') {
+          conditions.push({ CertificacionRealizada: true });
+      } else if (filters.status === 'pending') {
+          conditions.push({
+            OR: [
+              { CertificacionRealizada: false },
+              { CertificacionRealizada: null }
+            ]
+          });
+      }
+  }
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const where: any = { AND: conditions };
+
+  try {
+    const [facturas, total] = await Promise.all([
+      prisma.factura.findMany({
+        where,
+        take: pageSize,
+        skip: skip,
+        orderBy: {
+          swdatecreated: 'desc',
+        },
+      }),
+      prisma.factura.count({ where })
+    ]);
+
+    // Use stringify/parse to simulate API serialization for Dates and BigInts
+    const serializedData = JSON.parse(JSON.stringify(facturas, replacer));
+
+    const formattedData = (serializedData as ApiFactura[]).map((f) => ({
+      ...f,
+      swdatecreated: f.swdatecreated ? new Date(f.swdatecreated).toLocaleDateString() : '-',
+    }));
+    
+    return { data: formattedData, total };
+
+  } catch (error) {
+    console.error('Error fetching facturas:', error);
+    return { data: [], total: 0 };
+  }
 }
 
 interface FacturaRow {

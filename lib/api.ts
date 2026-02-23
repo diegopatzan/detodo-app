@@ -1,13 +1,14 @@
 const getBaseUrl = () => {
+  if (typeof window !== 'undefined') {
+    return '/api'; // Browser client-side relative URL
+  }
   if (process.env.NEXT_PUBLIC_API_URL) {
     return process.env.NEXT_PUBLIC_API_URL;
   }
   if (process.env.VERCEL_URL) {
-    return `https://${process.env.VERCEL_URL}/api`;
+     return `https://${process.env.VERCEL_URL}/api`;
   }
-  if (typeof window !== 'undefined') {
-    return '/api'; // Browser client-side relative URL
-  }
+  
   return 'http://localhost:3000/api'; // Default for local server-side
 };
 

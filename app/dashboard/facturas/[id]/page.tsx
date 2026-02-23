@@ -3,8 +3,16 @@ import { notFound } from 'next/navigation';
 import Link from 'next/link';
 import { ChevronLeft } from 'lucide-react';
 import { formatCurrency } from '@/lib/utils';
-import { fetchSingleFromApi } from '@/lib/api';
+import prisma from '@/lib/prisma';
+import { Prisma, FacturaDetalle } from '@prisma/client';
 
+// Helper to handle BigInt serialization
+function replacer(key: string, value: unknown) {
+  if (typeof value === 'bigint') {
+    return value.toString();
+  }
+  return value;
+}
 
 interface ApiFacturaDetalle {
   Id_FacturaTemporal: string;
@@ -75,42 +83,91 @@ interface ApiFactura {
 }
 
 async function getFactura(id: string) {
-  const factura = await fetchSingleFromApi(`facturas/${id}`);
+  try {
+    const facturaId = BigInt(id);
 
-  if (!factura || factura.error) return null;
+    // 1. Fetch Factura
+    const factura = await prisma.factura.findUnique({
+      where: { Id_FacturaTemporal: facturaId }
+    });
 
-  const raw = factura as ApiFactura;
+    if (!factura) {
+      return null;
+    }
 
-  return {
-    ...raw,
-    Total_Venta: Number(raw.Total_Venta),
-    Total_Descuento: Number(raw.Total_Descuento),
-    Total_IVA: Number(raw.Total_IVA),
-    Total_SubTotal: Number(raw.Total_SubTotal),
-    Total_Efectivo: Number(raw.Total_Efectivo),
-    Total_TarjetaCredito: Number(raw.Total_TarjetaCredito),
-    Total_Transferencia: Number(raw.Total_Transferencia),
-    Total_Credito: Number(raw.Total_Credito),
-    Total_NotaDeCredito: Number(raw.Total_NotaDeCredito),
+    // 2. Fetch Detalles
+    const detalles = await prisma.facturaDetalle.findMany({
+      where: { Id_FacturaTemporal: facturaId }
+    });
 
-    swdatecreated: raw.swdatecreated ? new Date(raw.swdatecreated).toLocaleDateString() : '-',
-    swdateupdated: raw.swdateupdated ? new Date(raw.swdateupdated).toLocaleDateString() : '-',
-    fechaCertificacion: raw.fechaCertificacion ? new Date(raw.fechaCertificacion).toLocaleDateString() : '-',
-    fechaAnulacion: raw.fechaAnulacion ? new Date(raw.fechaAnulacion).toLocaleDateString() : '-',
-    
-  
-    detalles: raw.detalles.map(d => ({
+    // 3. Fetch Relations
+    const [empresa, sucursal] = await Promise.all([
+      prisma.empresa.findUnique({ where: { Id_Empresa: factura.Id_Empresa } }),
+      prisma.sucursal.findUnique({ where: { Id_Sucursal: factura.Id_Sucursal } })
+    ]);
+
+    // 4. Fetch Product Names for Details
+    const productIds = Array.from(new Set(detalles.map((d: FacturaDetalle) => d.Id_Producto)));
+    const productos = await prisma.producto.findMany({
+      where: { Id_Producto: { in: productIds } },
+      select: { Id_Producto: true, Nombre: true }
+    });
+
+    // Explicitly typing 'p' to avoid TS implicit any error
+    const productoMap = new Map(productos.map((p: { Id_Producto: string; Nombre: string | null }) => [p.Id_Producto, p.Nombre]));
+
+    // 5. Construct Response with Enriched Data
+    const enrichedDetalles = detalles.map((d: FacturaDetalle) => ({
       ...d,
-      Precio_Unitario: Number(d.Precio_Unitario),
-      Total_Venta: Number(d.Total_Venta),
-      Total_SubTotal: Number(d.Total_SubTotal),
-      Total_Descuento: Number(d.Total_Descuento),
-      PorcentajeDescuento: Number(d.PorcentajeDescuento),
-      Total_IVA: Number(d.Total_IVA),
-     
-      Descripcion: d.NombreProducto || d.Descripcion, 
-    }))
-  };
+      NombreProducto: productoMap.get(d.Id_Producto) || d.Descripcion || d.Id_Producto
+    }));
+
+    const responseData = {
+      ...factura,
+      detalles: enrichedDetalles,
+      Entidades: {
+        Empresa: empresa ? empresa.Descripcion : factura.Id_Empresa,
+        Sucursal: sucursal ? sucursal.NombreSucursal : factura.Id_Sucursal,
+        // Bodega table not found in schema, returning ID
+        Bodega: factura.Id_Bodega
+      }
+    };
+
+    // Serialize to handle BigInt and match expected structure
+    const raw = JSON.parse(JSON.stringify(responseData, replacer)) as ApiFactura;
+
+    return {
+      ...raw,
+      Total_Venta: Number(raw.Total_Venta),
+      Total_Descuento: Number(raw.Total_Descuento),
+      Total_IVA: Number(raw.Total_IVA),
+      Total_SubTotal: Number(raw.Total_SubTotal),
+      Total_Efectivo: Number(raw.Total_Efectivo),
+      Total_TarjetaCredito: Number(raw.Total_TarjetaCredito),
+      Total_Transferencia: Number(raw.Total_Transferencia),
+      Total_Credito: Number(raw.Total_Credito),
+      Total_NotaDeCredito: Number(raw.Total_NotaDeCredito),
+
+      swdatecreated: raw.swdatecreated ? new Date(raw.swdatecreated).toLocaleDateString() : '-',
+      swdateupdated: raw.swdateupdated ? new Date(raw.swdateupdated).toLocaleDateString() : '-',
+      fechaCertificacion: raw.fechaCertificacion ? new Date(raw.fechaCertificacion).toLocaleDateString() : '-',
+      fechaAnulacion: raw.fechaAnulacion ? new Date(raw.fechaAnulacion).toLocaleDateString() : '-',
+      
+      detalles: raw.detalles.map(d => ({
+        ...d,
+        Precio_Unitario: Number(d.Precio_Unitario),
+        Total_Venta: Number(d.Total_Venta),
+        Total_SubTotal: Number(d.Total_SubTotal),
+        Total_Descuento: Number(d.Total_Descuento),
+        PorcentajeDescuento: Number(d.PorcentajeDescuento),
+        Total_IVA: Number(d.Total_IVA),
+        Descripcion: d.NombreProducto || d.Descripcion, 
+      }))
+    };
+  } catch (error) {
+    console.error("Error fetching factura:", error);
+    return null;
+  }
 }
 
 // Helper to style section headers consistently
