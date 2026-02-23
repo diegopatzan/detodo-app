@@ -78,15 +78,23 @@ export function DataTable<T>({
             ) : (
               data.map((item, rowIndex) => (
                 <tr key={rowIndex} className="hover:bg-[#714B67]/5 transition-colors group">
-                  {columns.map((column, colIndex) => (
-                     <td key={colIndex} className="px-4 py-3 whitespace-nowrap max-w-xs truncate text-sm text-gray-700 group-hover:text-gray-900" title={typeof item[column.accessorKey] === 'string' ? item[column.accessorKey] : ''}>
-                      {column.cell 
-                        ? column.cell(item) 
-                        : (typeof column.accessorKey === 'function'
-                          ? column.accessorKey(item)
-                          : (item[column.accessorKey] as React.ReactNode))} {/* Fix strict type access */}
-                    </td>
-                  ))}
+                   {columns.map((column, colIndex) => {
+                     // Safer way to access the value for the title prop
+                     const value = typeof column.accessorKey === 'string' 
+                        ? item[column.accessorKey] 
+                        : null;
+                     const title = typeof value === 'string' ? value : '';
+                     
+                     return (
+                      <td key={colIndex} className="px-4 py-3 whitespace-nowrap max-w-xs truncate text-sm text-gray-700 group-hover:text-gray-900" title={title}>
+                        {column.cell 
+                          ? column.cell(item) 
+                          : (typeof column.accessorKey === 'function'
+                            ? column.accessorKey(item)
+                            : (item[column.accessorKey] as React.ReactNode))} {/* Fix strict type access */}
+                      </td>
+                    );
+                   })}
                 </tr>
               ))
             )}
