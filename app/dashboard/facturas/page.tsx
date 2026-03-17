@@ -60,11 +60,15 @@ export default async function FacturasPage({
   const { data, total } = await getFacturas(resolvedSearchParams);
   const totalPages = Math.ceil(total / pageSize);
 
-  const baseQuery = new URLSearchParams(
-    Object.entries(resolvedSearchParams)
-      .filter(([key]) => key !== 'page')
-      .map(([key, value]) => [key, Array.isArray(value) ? value[0] ?? '' : value])
-  );
+  const baseQuery = new URLSearchParams();
+  for (const [key, value] of Object.entries(resolvedSearchParams)) {
+    if (key === 'page') continue;
+    if (Array.isArray(value)) {
+      if (value[0] != null) baseQuery.set(key, value[0] as string);
+    } else if (value != null) {
+      baseQuery.set(key, value as string);
+    }
+  }
 
   const createPageHref = (pageNumber: number) => {
     const params = new URLSearchParams(baseQuery.toString());
