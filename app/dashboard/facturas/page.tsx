@@ -60,6 +60,19 @@ export default async function FacturasPage({
   const { data, total } = await getFacturas(resolvedSearchParams);
   const totalPages = Math.ceil(total / pageSize);
 
+  const baseQuery = new URLSearchParams(
+    Object.entries(resolvedSearchParams)
+      .filter(([key]) => key !== 'page')
+      .map(([key, value]) => [key, Array.isArray(value) ? value[0] ?? '' : value])
+  );
+
+  const createPageHref = (pageNumber: number) => {
+    const params = new URLSearchParams(baseQuery.toString());
+    params.set('page', pageNumber.toString());
+    const qs = params.toString();
+    return `/dashboard/facturas${qs ? `?${qs}` : ''}`;
+  };
+
   const columns: {
     header: string;
     accessorKey: keyof FacturaRow;
@@ -113,6 +126,8 @@ export default async function FacturasPage({
         currentPage={page}
         totalPages={totalPages}
         baseUrl="/dashboard/facturas"
+        prevHref={page > 1 ? createPageHref(page - 1) : undefined}
+        nextHref={page < totalPages ? createPageHref(page + 1) : undefined}
       />
     </div>
   );

@@ -17,17 +17,21 @@ interface DataTableProps<T> {
   baseUrl?: string;
   currentPageSize?: number;
   totalItems?: number;
+  prevHref?: string;
+  nextHref?: string;
 }
 
-export function DataTable<T>({ 
-  columns, 
-  data, 
+export function DataTable<T>({
+  columns,
+  data,
   title,
   currentPage = 1,
-  currentPageSize = 20, 
+  currentPageSize = 20,
   totalItems = 0,
   totalPages = 1,
-  baseUrl = ''
+  baseUrl = '',
+  prevHref,
+  nextHref,
 }: DataTableProps<T>) {
   
  // Pagination items
@@ -106,7 +110,11 @@ export function DataTable<T>({
       {totalPages > 1 && (
         <div className="bg-white px-4 py-3 flex items-center justify-end border-t border-gray-200 gap-2">
             <Link 
-              href={currentPage > 1 ? `${baseUrl}?page=${currentPage - 1}` : '#'}
+              href={
+                currentPage > 1
+                  ? prevHref ?? `${baseUrl}?page=${currentPage - 1}`
+                  : '#'
+              }
               className={`p-1.5 rounded-md border border-gray-200 text-gray-600 hover:bg-[#714B67] hover:text-white hover:border-[#714B67] transition-all ${currentPage <= 1 ? 'opacity-30 pointer-events-none' : ''}`}
             >
               <ChevronLeft className="h-4 w-4" />
@@ -117,7 +125,11 @@ export function DataTable<T>({
               <span className="text-gray-600">{totalPages}</span>
             </div>
             <Link 
-              href={currentPage < totalPages ? `${baseUrl}?page=${currentPage + 1}` : '#'}
+              href={
+                currentPage < totalPages
+                  ? nextHref ?? `${baseUrl}?page=${currentPage + 1}`
+                  : '#'
+              }
               className={`p-1.5 rounded-md border border-gray-200 text-gray-600 hover:bg-[#714B67] hover:text-white hover:border-[#714B67] transition-all ${currentPage >= totalPages ? 'opacity-30 pointer-events-none' : ''}`}
             >
               <ChevronRight className="h-4 w-4" />
